@@ -18,3 +18,28 @@ Documents/
 Applications/
 
 
+.CFUserTextEncoding
+.ShadowsocksX-NG/
+.conda/
+.cups/
+.gitconfig
+.idlerc/
+.lesshst
+.matplotlib/
+.oracle_jre_usage/
+.python_history
+.tcshrc
+.viminfo
+.xonshrc
+.zsh_sessions/
+Public/
+git-katas/
+gly_webpage/
+iCloud Drive (Archive)/
+miniconda3/
+ppha30538_fall2024/
+ps4pr3.py
+ps5pr8.py
+ps5pr9.py
+untitled0.py
+
