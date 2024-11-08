@@ -26,8 +26,8 @@ output:
 ## Submission Steps (10 pts)
 1. This problem set is a paired problem set.
 2. Play paper, scissors, rock to determine who goes first. Call that person *Partner 1*.
-    - Partner 1 (name and cnet ID):
-    - Partner 2 (name and cnet ID):
+    - Partner 1 (name and cnet ID): luyao Guo , luyao1
+    - Partner 2 (name and cnet ID): Ruyu Zhang, Ruyu Zhang
 3. Partner 1 will accept the `ps5` and then share the link it creates with their partner. You can only share it with one partner so you will not be able to change it after your partner has accepted. 
 4. "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*\_\_\*\* \*\*\_\_\*\*
 5. "I have uploaded the names of anyone else other than my partner and I worked with on the problem set **[here](https://docs.google.com/forms/d/185usrCREQaUbvAXpWhChkjghdGgmAZXA3lPWpXLLsts/edit)**"  (1 point)
@@ -51,19 +51,109 @@ alt.renderers.enable("png")
 ```
 
 
+```{python}
+import requests
+from bs4 import BeautifulSoup
+```
+
 ## Step 1: Develop initial scraper and crawler
 
 ### 1. Scraping (PARTNER 1)
 
 ```{python}
+# Set up the URL and retrieve page content
+page_url = 'https://oig.hhs.gov/fraud/enforcement/'
+page_response = requests.get(page_url)
+soup = BeautifulSoup(page_response.text, 'html.parser')
 
+# Initialize lists to store the extracted data
+category_data = []
+title_data = []
+date_data = []
+url_links = []
+
+# Locate the main content sections for each enforcement action
+entries = soup.find_all('li', class_='usa-card card--list pep-card--minimal mobile:grid-col-12')
+
+# Loop through each entry to collect title, date, category, and link
+for entry in entries:
+    # Extract title
+    title_block = entry.find('h2', class_='usa-card__heading')
+    title = title_block.get_text(strip=True) if title_block else 'Title Not Available'
+    
+    # Extract link
+    link_tag = title_block.find('a') if title_block else None
+    link_url = f"https://oig.hhs.gov{link_tag['href']}" if link_tag else 'Link Not Available'
+
+    # Extract date
+    date_block = entry.find('span', class_='text-base-dark padding-right-105')
+    date = date_block.get_text(strip=True) if date_block else 'Date Not Available'
+
+    # Extract category
+    category_block = entry.find('li', class_='display-inline-block usa-tag text-no-lowercase text-base-darkest bg-base-lightest margin-right-1')
+    category = category_block.get_text(strip=True) if category_block else 'Category Not Available'
+
+    # Append data to respective lists
+    category_data.append(category)
+    title_data.append(title)
+    date_data.append(date)
+    url_links.append(link_url)
+
+# Store data in a DataFrame
+enforcement_data = pd.DataFrame({
+    'Enforcement Category': category_data,
+    'Enforcement Title': title_data,
+    'Enforcement Date': date_data,
+    'Enforcement Link': url_links
+})
+
+# Display the first few rows of the DataFrame
+print("Scraped DataFrame:")
+print(enforcement_data.head())
+
+# Save DataFrame to a CSV file
+enforcement_data.to_csv('enforcement_actions_data.csv', index=False, encoding='utf-8')
 ```
 
   
+
+
 ### 2. Crawling (PARTNER 1)
 
 ```{python}
+# Load the CSV file from the Scraping step
+enforcement_data = pd.read_csv('enforcement_actions_data.csv')
 
+# Initialize list to store agency names
+agency_names = []
+
+# Function to extract agency name from each individual page
+def get_agency_name(link):
+    response = requests.get(link)
+    page_soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Locate the agency name, e.g., in the third <p> under a specific <div> (modify as needed)
+    try:
+        # Assuming agency information is in a particular paragraph or div structure
+        agency_info = page_soup.find('div', class_='content').find_all('p')[2].get_text(strip=True)
+    except (AttributeError, IndexError):
+        agency_info = 'Agency Not Found'
+    
+    return agency_info
+
+# Crawl each link in the DataFrame and get the agency name
+for link in enforcement_data['Enforcement Link']:
+    agency_name = get_agency_name(link)
+    agency_names.append(agency_name)
+    time.sleep(1)  # Add a delay to be polite to the server
+
+# Add the agency names to the DataFrame
+enforcement_data['Agency Name'] = agency_names
+
+# Display Data frame
+print("Updated DataFrame with Agency Information:")
+print(enforcement_data.head())
+enforcement_data.to_csv('enforcement_actions_with_agency_data.csv', index=False, encoding='utf-8')
 ```
 
 ## Step 2: Making the scraper dynamic
