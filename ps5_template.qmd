@@ -366,6 +366,7 @@ df_enforcement_2021['Topic'] = df_enforcement_2021.apply(
     axis=1
 )
 
+
 ```
 
 
@@ -412,6 +413,8 @@ topic_chart = alt.Chart(df_topic_monthly, title="Number of Enforcement Actions b
 topic_chart.display()
 ```
 
+
+
 ## Step 4: Create maps of enforcement activity
 
 ### 1. Map by State (PARTNER 1)
@@ -450,36 +453,45 @@ plt.show()
 
 ### 1. Merge zip code shapefile with population
 ```{python}
-zip_shapefile_path = '/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/tl_2020_us_zcta520'
+import geopandas as gpd
+import pandas as pd
+
+# Set paths to the files
+zip_shapefile_path = '/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/gz_2010_us_860_00_500k.shp'
+population_csv_path = '/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/DECENNIALDHC2020.P1-Data.csv'
+
+# Load the ZIP Code shapefile
 zip_gdf = gpd.read_file(zip_shapefile_path)
 
-# Load population data CSV
-population_csv_path = '/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/DECENNIALDHC2020.P1_2024-11-09T125756'
+# Load the population CSV
 population_df = pd.read_csv(population_csv_path)
 
 # Ensure ZIP Code column in population data matches the ZIP Code field in shapefile
 population_df['ZCTA'] = population_df['ZCTA'].astype(str)
 
-# Merge ZIP Code shapefile with population data
-zip_gdf = zip_gdf.merge(population_df, left_on="ZCTA5CE20", right_on="ZCTA", how="left")
+# Merge ZIP Code shapefile with population data on the ZIP Code column
+zip_gdf = zip_gdf.merge(population_df, left_on="ZCTA5CE10", right_on="ZCTA", how="left")
+print("Merged ZIP Code shapefile with population data:")
 print(zip_gdf.head())
+
 ```
 
 ### 2. Conduct spatial join
 ```{python}
 # Load US Attorney District shapefile
-district_shapefile_path = '/path/to/US_Attorney_Districts_Shapefile.shp'  # Update this path to your district shapefile location
+district_shapefile_path = '/path/to/US_Attorney_Districts_Shapefile.shp'  # Replace with actual path
 district_gdf = gpd.read_file(district_shapefile_path)
 
-# Make sure both GeoDataFrames use the same coordinate reference system (CRS)
+# Ensure both GeoDataFrames use the same Coordinate Reference System (CRS)
 zip_gdf = zip_gdf.to_crs(district_gdf.crs)
 
-# Perform spatial join between ZIP Code and District shapefiles
+# Perform spatial join between ZIP Code shapefile and District shapefile
 zip_district_join = gpd.sjoin(zip_gdf, district_gdf, how="inner", op="intersects")
 
 # Aggregate population to get total population in each district
-district_population = zip_district_join.groupby('district_field_name')['P1_TOTAL_POPULATION'].sum().reset_index()
+district_population = zip_district_join.groupby('DISTRICT_NAME')['P1_TOTAL_POPULATION'].sum().reset_index()
 district_population.columns = ['District', 'Total Population']  # Rename columns for clarity
+print("Aggregated population by district:")
 print(district_population.head())
 
 
@@ -487,7 +499,6 @@ print(district_population.head())
 
 ### 3. Map the action ratio in each district
 ```{python}
-# Merge enforcement actions with district population data
 district_data = district_population.merge(enforcement_actions_df, on='District', how='left')
 district_data['Action Count'] = district_data['Action Count'].fillna(0)  # Fill missing action counts with 0
 
@@ -495,7 +506,7 @@ district_data['Action Count'] = district_data['Action Count'].fillna(0)  # Fill 
 district_data['Actions Per Capita'] = district_data['Action Count'] / district_data['Total Population']
 
 # Merge with district GeoDataFrame for mapping
-district_map_gdf = district_gdf.merge(district_data, left_on='district_field_name', right_on='District')
+district_map_gdf = district_gdf.merge(district_data, left_on='DISTRICT_NAME', right_on='District')
 
 # Plot the map
 import matplotlib.pyplot as plt
@@ -504,5 +515,6 @@ fig, ax = plt.subplots(1, 1, figsize=(12, 8))
 district_map_gdf.plot(column='Actions Per Capita', cmap='Reds', linewidth=0.8, ax=ax, edgecolor='0.8', legend=True)
 ax.set_title("Enforcement Actions Per Capita by US Attorney District")
 plt.show()
+
 
 ```
