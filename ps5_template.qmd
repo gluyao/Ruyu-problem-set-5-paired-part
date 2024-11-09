@@ -44,7 +44,6 @@ output:
 import pandas as pd
 import altair as alt
 import time
-
 import warnings 
 warnings.filterwarnings('ignore')
 alt.renderers.enable("png")
@@ -62,39 +61,33 @@ from datetime import datetime
 ### 1. Scraping (PARTNER 1)
 
 ```{python}
-# Set up the URL and retrieve page content
+# Set up the URL parser and initialize lists
 page_url = 'https://oig.hhs.gov/fraud/enforcement/'
 page_response = requests.get(page_url)
 soup = BeautifulSoup(page_response.text, 'html.parser')
-
-# Initialize lists to store the extracted data
 category_data = []
 title_data = []
 date_data = []
 url_links = []
 
-# Locate the main content sections for each enforcement action
+# Locate the main content sections 
 entries = soup.find_all(
     'li', class_='usa-card card--list pep-card--minimal mobile:grid-col-12')
 
 # Loop through each entry to collect title, date, category, and link
 for entry in entries:
-    # Extract title
     title_block = entry.find('h2', class_='usa-card__heading')
     title = title_block.get_text(
         strip=True) if title_block else 'Title Not Available'
 
-    # Extract link
     link_tag = title_block.find('a') if title_block else None
     link_url = f"https://oig.hhs.gov{link_tag['href']
                                      }" if link_tag else 'Link Not Available'
 
-    # Extract date
     date_block = entry.find('span', class_='text-base-dark padding-right-105')
     date = date_block.get_text(
         strip=True) if date_block else 'Date Not Available'
 
-    # Extract category
     category_block = entry.find(
         'li', class_='display-inline-block usa-tag text-no-lowercase text-base-darkest bg-base-lightest margin-right-1')
     category = category_block.get_text(
@@ -106,22 +99,19 @@ for entry in entries:
     date_data.append(date)
     url_links.append(link_url)
 
-# Store data in a DataFrame
+# save data to DataFrame & display
 enforcement_data = pd.DataFrame({
     'Enforcement Category': category_data,
     'Enforcement Title': title_data,
     'Enforcement Date': date_data,
     'Enforcement Link': url_links
 })
-
-# Display the first few rows of the DataFrame
 print("Scraped DataFrame:")
 print(enforcement_data.head())
 
 ```
 
   
-
 
 ### 2. Crawling (PARTNER 1)
 
@@ -133,8 +123,6 @@ agency_names = []
 def get_agency_name(link):
     response = requests.get(link)
     page_soup = BeautifulSoup(response.text, 'html.parser')
-    
-    # Default message if agency information is not found
     agency_info = 'Agency Not Found'
     
     try:
@@ -153,12 +141,10 @@ def get_agency_name(link):
 for link in enforcement_data['Enforcement Link']:
     agency_name = get_agency_name(link)
     agency_names.append(agency_name)
-    time.sleep(1)  # Add a delay to be polite to the server
+    time.sleep(1) 
 
-# Add the agency names to the DataFrame
+# Add the agency names to the DataFrame &updata data frame
 enforcement_data['Agency Name'] = agency_names
-
-# Display updated DataFrame
 print("Updated DataFrame with Agency Information:")
 print(enforcement_data.head())
 
@@ -309,6 +295,24 @@ There are 1534 enforcement actions.
 scrape_enforcement_actions(2021, 1)
 ```
 
+```{python}
+df_enforcement = pd.read_csv('enforcement_actions_2021_1.csv')
+
+print(f"Total number of enforcement actions: {len(df_enforcement)}")
+print("Earliest enforcement action:")
+print(df_enforcement.iloc[-1])
+```
+
+
+Total Number of Enforcement Actions: A total of 3022 enforcement actions were collected since January 2021.
+Date and Details of the Earliest Enforcement Action:
+Date: January 4, 2021
+Title: The United States and Tennessee Resolve Claims Involving Medicaid Managed Care Fraud Scheme
+Category: Criminal and Civil Actions
+Link: https://oig.hhs.gov/fraud/enforcement/the-united-states-and-tennessee-resolve-claims-involving-medicaid-managed-care-fraud-scheme
+Agency Involved: U.S. Attorney's Office, Middle District of Tennessee
+
+
 ## Step 3: Plot data based on scraped data
 
 ### 1. Plot the number of enforcement actions over time (PARTNER 2)
@@ -339,16 +343,73 @@ line_chart_2021
 
 ### 2. Plot the number of enforcement actions categorized: (PARTNER 1)
 
+
+```{python}
+df_enforcement_2021['Type'] = df_enforcement_2021['Enforcement Category'].apply(
+    lambda x: 'Criminal and Civil Actions' if 'Criminal and Civil' in x else 'State Enforcement Agencies'
+)
+
+def assign_topic(title):
+    if 'health' in title.lower() or 'medicare' in title.lower() or 'medicaid' in title.lower():
+        return 'Health Care Fraud'
+    elif 'financial' in title.lower() or 'bank' in title.lower():
+        return 'Financial Fraud'
+    elif 'drug' in title.lower():
+        return 'Drug Enforcement'
+    elif 'bribery' in title.lower() or 'corruption' in title.lower():
+        return 'Bribery/Corruption'
+    else:
+        return 'Other'
+
+df_enforcement_2021['Topic'] = df_enforcement_2021.apply(
+    lambda row: assign_topic(row['Enforcement Title']) if row['Type'] == 'Criminal and Civil Actions' else None,
+    axis=1
+)
+
+```
+
+
 * based on "Criminal and Civil Actions" vs. "State Enforcement Agencies"
 
 ```{python}
+# Plot the line chart for "Criminal and Civil Actions" vs. "State Enforcement Agencies"
+df_type_monthly = df_enforcement_2021.groupby(['year_month', 'Type']).size().reset_index(name='num_enforcement')
+df_type_monthly['year_month'] = df_type_monthly['year_month'].dt.to_timestamp()
 
+type_chart = alt.Chart(df_type_monthly, title="Number of Enforcement Actions by Type Over Time").mark_line().encode(
+    alt.X("yearmonth(year_month):O", title="Time")
+        .axis(format="%Y", labelAngle=0),
+    alt.Y('num_enforcement:Q', title='Number of Enforcement Actions'),
+    color='Type:N',
+    tooltip=['year_month', 'num_enforcement', 'Type']
+).properties(
+    width=600,
+    height=300
+)
+
+type_chart.display()
 ```
 
 * based on five topics
 
 ```{python}
+#Plot the line chart for topics within "Criminal and Civil Actions"
+df_topic_monthly = df_enforcement_2021[df_enforcement_2021['Type'] == 'Criminal and Civil Actions']
+df_topic_monthly = df_topic_monthly.groupby(['year_month', 'Topic']).size().reset_index(name='num_enforcement')
+df_topic_monthly['year_month'] = df_topic_monthly['year_month'].dt.to_timestamp()
 
+topic_chart = alt.Chart(df_topic_monthly, title="Number of Enforcement Actions by Topic Over Time").mark_line().encode(
+    alt.X("yearmonth(year_month):O", title="Time")
+        .axis(format="%Y", labelAngle=0),
+    alt.Y('num_enforcement:Q', title='Number of Enforcement Actions'),
+    color='Topic:N',
+    tooltip=['year_month', 'num_enforcement', 'Topic']
+).properties(
+    width=600,
+    height=300
+)
+
+topic_chart.display()
 ```
 
 ## Step 4: Create maps of enforcement activity
@@ -357,7 +418,22 @@ line_chart_2021
 
 ```{python}
 import geopandas as gpd
+import matplotlib.pyplot as plt
+# load state shapefile
+us_states = gpd.read_file('/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/cb_2018_us_state_5m')
+# aggregate data 'State' & 'Enforcement Count'
+us_states = us_states.merge(state_counts, how="left", left_on="NAME", right_on="State")
+us_states['Enforcement Count'] = us_states['Enforcement Count'].fillna(0)
+# graph
+fig, ax = plt.subplots(1, 1, figsize=(20, 15))
+us_states.plot(column='Enforcement Count', cmap='OrRd', linewidth=0.8, ax=ax, edgecolor='0.8', legend=True)
+ax.set_title('Enforcement Actions by State', fontdict={'fontsize': '18', 'fontweight': '3'})
 
+ax.set_xlim([-130, -60]) 
+ax.set_ylim([20, 55])   
+ax.set_axis_off()
+
+plt.show()
 ```
 
 
@@ -366,6 +442,9 @@ import geopandas as gpd
 ```{python}
 
 ```
+
+
+
 
 ## Extra Credit
 
