@@ -306,7 +306,7 @@ There are 1534 enforcement actions.
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
-
+scrape_enforcement_actions(2021, 1)
 ```
 
 ## Step 3: Plot data based on scraped data
@@ -314,6 +314,26 @@ There are 1534 enforcement actions.
 ### 1. Plot the number of enforcement actions over time (PARTNER 2)
 
 ```{python}
+df_enforcement_2021 = pd.read_csv('enforcement_actions_2023_1.csv')
+df_enforcement_2021['Enforcement Date'] = pd.to_datetime(df_enforcement_2021['Enforcement Date'], errors='coerce')
+df_enforcement_2021['year_month'] = df_enforcement_2021['Enforcement Date'].dt.to_period('M')
+df_enforcement_2021_monthly = df_enforcement_2021.groupby(['year_month']).size().reset_index(name='num_enforcement')
+df_enforcement_2021_monthly['year_month'] = df_enforcement_2021_monthly['year_month'].dt.to_timestamp()
+
+line_chart_2021=alt.Chart(df_enforcement_2021_monthly, title="The number of enforcement actions over time").mark_line().encode(
+    alt.X("yearmonth(year_month):O", title="Time")  
+        .axis(
+            format="%Y",
+            labelAngle=0, 
+        ), 
+    alt.Y('num_enforcement:Q', title='Number of enforcement actions'),
+    tooltip=['year_month', 'num_enforcement']
+).properties(
+    width=600,
+    height=300
+)
+
+line_chart_2021
 
 ```
 
@@ -336,6 +356,7 @@ There are 1534 enforcement actions.
 ### 1. Map by State (PARTNER 1)
 
 ```{python}
+import geopandas as gpd
 
 ```
 
@@ -343,7 +364,6 @@ There are 1534 enforcement actions.
 ### 2. Map by District (PARTNER 2)
 
 ```{python}
-
 
 ```
 
