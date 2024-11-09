@@ -54,6 +54,7 @@ alt.renderers.enable("png")
 ```{python}
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
 ```
 
 ## Step 1: Develop initial scraper and crawler
@@ -73,25 +74,31 @@ date_data = []
 url_links = []
 
 # Locate the main content sections for each enforcement action
-entries = soup.find_all('li', class_='usa-card card--list pep-card--minimal mobile:grid-col-12')
+entries = soup.find_all(
+    'li', class_='usa-card card--list pep-card--minimal mobile:grid-col-12')
 
 # Loop through each entry to collect title, date, category, and link
 for entry in entries:
     # Extract title
     title_block = entry.find('h2', class_='usa-card__heading')
-    title = title_block.get_text(strip=True) if title_block else 'Title Not Available'
-    
+    title = title_block.get_text(
+        strip=True) if title_block else 'Title Not Available'
+
     # Extract link
     link_tag = title_block.find('a') if title_block else None
-    link_url = f"https://oig.hhs.gov{link_tag['href']}" if link_tag else 'Link Not Available'
+    link_url = f"https://oig.hhs.gov{link_tag['href']
+                                     }" if link_tag else 'Link Not Available'
 
     # Extract date
     date_block = entry.find('span', class_='text-base-dark padding-right-105')
-    date = date_block.get_text(strip=True) if date_block else 'Date Not Available'
+    date = date_block.get_text(
+        strip=True) if date_block else 'Date Not Available'
 
     # Extract category
-    category_block = entry.find('li', class_='display-inline-block usa-tag text-no-lowercase text-base-darkest bg-base-lightest margin-right-1')
-    category = category_block.get_text(strip=True) if category_block else 'Category Not Available'
+    category_block = entry.find(
+        'li', class_='display-inline-block usa-tag text-no-lowercase text-base-darkest bg-base-lightest margin-right-1')
+    category = category_block.get_text(
+        strip=True) if category_block else 'Category Not Available'
 
     # Append data to respective lists
     category_data.append(category)
@@ -111,8 +118,6 @@ enforcement_data = pd.DataFrame({
 print("Scraped DataFrame:")
 print(enforcement_data.head())
 
-# Save DataFrame to a CSV file
-enforcement_data.to_csv('enforcement_actions_data.csv', index=False, encoding='utf-8')
 ```
 
   
@@ -121,9 +126,6 @@ enforcement_data.to_csv('enforcement_actions_data.csv', index=False, encoding='u
 ### 2. Crawling (PARTNER 1)
 
 ```{python}
-# Load the CSV file from the Scraping step
-enforcement_data = pd.read_csv('enforcement_actions_data.csv')
-
 # Initialize list to store agency names
 agency_names = []
 
@@ -132,12 +134,18 @@ def get_agency_name(link):
     response = requests.get(link)
     page_soup = BeautifulSoup(response.text, 'html.parser')
     
-    # Locate the agency name, e.g., in the third <p> under a specific <div> (modify as needed)
+    # Default message if agency information is not found
+    agency_info = 'Agency Not Found'
+    
     try:
-        # Assuming agency information is in a particular paragraph or div structure
-        agency_info = page_soup.find('div', class_='content').find_all('p')[2].get_text(strip=True)
-    except (AttributeError, IndexError):
-        agency_info = 'Agency Not Found'
+        # Locate the "Agency:" span
+        agency_label = page_soup.find('span', class_='padding-right-2 text-base', string="Agency:")
+        if agency_label:
+            # If found, get the next sibling text (which is likely the agency name)
+            agency_info = agency_label.find_next_sibling(text=True).strip()
+    
+    except Exception as e:
+        print(f"Error occurred for link {link}: {e}")
     
     return agency_info
 
@@ -150,10 +158,10 @@ for link in enforcement_data['Enforcement Link']:
 # Add the agency names to the DataFrame
 enforcement_data['Agency Name'] = agency_names
 
-# Display Data frame
+# Display updated DataFrame
 print("Updated DataFrame with Agency Information:")
 print(enforcement_data.head())
-enforcement_data.to_csv('enforcement_actions_with_agency_data.csv', index=False, encoding='utf-8')
+
 ```
 
 ## Step 2: Making the scraper dynamic
@@ -162,12 +170,138 @@ enforcement_data.to_csv('enforcement_actions_with_agency_data.csv', index=False,
 
 * a. Pseudo-Code (PARTNER 2)
 
+Input Validation:
+Check if the input year is 2013 or later.
+If the year is less than 2013, print a message and exit the function.
+
+Initialization:
+Define the base URL for the enforcement actions page.
+Initialize lists to store data for titles, dates, categories, links, and agencies.
+Set the initial page number to 1.
+Initialize a variable keep_scraping as True to control the main loop.
+
+Main Loop (While Loop):
+Loop Definition: A while loop that continues as long as keep_scraping is True.
+Purpose: This loop will go through each page of the enforcement actions, scraping data until there are no more entries or until the specified date range is exceeded.
+Inside the While Loop:
+  Construct Page URL:
+    Append the page number to the base URL to form the full URL for the current page.
+  Send HTTP Request:
+    Use requests.get() to retrieve the page content.
+    Parse the HTML content with BeautifulSoup.
+  Locate Enforcement Entries:
+    Search for the main content section containing all enforcement actions on the page.
+    If no entries are found, set keep_scraping to False and break out of the loop.
+
+Inner Loop (For Loop):
+Loop Definition: A for loop that iterates over each enforcement action found in the current page's entries.
+Purpose: This loop extracts the details (title, date, category, link, and agency name) for each enforcement action.
+Inside the For Loop:
+  Extract Date:
+    Retrieve and parse the date of the enforcement action.
+    If the date is older than the specified starting month and year, set keep_scraping to False and break out of the loop.
+  Extract Title, Link, and Category:
+    Retrieve and store the title, link, and category of the enforcement action.
+  Extract Agency Name:
+    Call the get_agency_name function with the link to fetch the agency name from the detailed page.
+  Append Data to Lists:
+    Add the extracted data to the corresponding lists (titles, dates, categories, links, agencies).
+End of Inner For Loop:
+After processing each entry, increment the page number by 1 to move to the next page and add a 1-second delay to prevent server overload.
+
+Create DataFrame:
+Once the loop completes, create a DataFrame from the lists containing enforcement data.
+
+Save Data to CSV:
+Save the DataFrame as a CSV file named based on the input year and month.
+Print a confirmation message with the file name.
+
+Function Call Example:
+Call scrape_enforcement_actions with specific year and month values, such as scrape_enforcement_actions(2023, 1).
+
 
 * b. Create Dynamic Scraper (PARTNER 2)
 
 ```{python}
+def scrape_enforcement_actions(year, month):
+    if year < 2013:
+        print("The year should be restricted to 2013 or later.")
+        return
 
+    # Set the URL and initialize lists to store data
+    base_url = 'https://oig.hhs.gov/fraud/enforcement/'
+    titles, dates, categories, links, agencies = [], [], [], [], []
+
+    page = 1
+    keep_scraping = True
+
+    while keep_scraping:
+        # Construct the URL with pagination
+        url = f"{base_url}?page={page}"
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Locate the main content sections for each enforcement action
+        entries = soup.find_all(
+            'li', class_='usa-card card--list pep-card--minimal mobile:grid-col-12')
+
+        if not entries:  # Stop if no entries are found on the page
+            break
+
+        for entry in entries:
+            # Extract the date and stop if we exceed the specified date range
+            date_block = entry.find(
+                'span', class_='text-base-dark padding-right-105')
+            date_text = date_block.get_text(strip=True)
+            entry_date = datetime.strptime(date_text, '%B %d, %Y')
+            if entry_date.year < year or (entry_date.year == year and entry_date.month < month):
+                keep_scraping = False
+                break
+
+            # Extract other details if within the date range
+            title_block = entry.find('h2', class_='usa-card__heading')
+            title = title_block.get_text(strip=True)
+
+            link_tag = title_block.find('a')
+            link_url = f"https://oig.hhs.gov{link_tag['href']}"
+
+            category_block = entry.find(
+                'li', class_='display-inline-block usa-tag text-no-lowercase text-base-darkest bg-base-lightest margin-right-1')
+            category = category_block.get_text(strip=True)
+
+            # Get agency name from the linked page
+            agency_name = get_agency_name(link_url)
+
+            # Append data to lists
+            dates.append(date_text)
+            titles.append(title)
+            links.append(link_url)
+            categories.append(category)
+            agencies.append(agency_name)
+
+        # Increment page number and wait before the next request
+        page += 1
+        time.sleep(1)
+
+    # Create and save DataFrame
+    df_enforcement = pd.DataFrame({
+        'Enforcement Date': dates,
+        'Enforcement Title': titles,
+        'Enforcement Category': categories,
+        'Enforcement Link': links,
+        'Agency Name': agencies
+    })
+
+    # Save to CSV
+    file_name = f"enforcement_actions_{year}_{month}.csv"
+    df_enforcement.to_csv(file_name, index=False)
+    print(f"Data saved to {file_name}")
+
+
+scrape_enforcement_actions(2023, 1)
 ```
+There are 1534 enforcement actions.
+
 
 * c. Test Partner's Code (PARTNER 1)
 
@@ -209,6 +343,7 @@ enforcement_data.to_csv('enforcement_actions_with_agency_data.csv', index=False,
 ### 2. Map by District (PARTNER 2)
 
 ```{python}
+
 
 ```
 
