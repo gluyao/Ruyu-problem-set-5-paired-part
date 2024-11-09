@@ -31,7 +31,7 @@ output:
 3. Partner 1 will accept the `ps5` and then share the link it creates with their partner. You can only share it with one partner so you will not be able to change it after your partner has accepted. 
 4. "This submission is our work alone and complies with the 30538 integrity policy." Add your initials to indicate your agreement: \*\*\_\_\*\* \*\*\_\_\*\*
 5. "I have uploaded the names of anyone else other than my partner and I worked with on the problem set **[here](https://docs.google.com/forms/d/185usrCREQaUbvAXpWhChkjghdGgmAZXA3lPWpXLLsts/edit)**"  (1 point)
-6. Late coins used this pset: \*\*\_\_\*\* Late coins left after submission: \*\*\_\_\*\*
+6. Late coins used this pset: 0 Late coins left after submission: 1
 7. Knit your `ps5.qmd` to an PDF file to make `ps5.pdf`, 
     * The PDF should not be more than 25 pages. Use `head()` and re-size figures when appropriate. 
 8. (Partner 1): push  `ps5.qmd` and `ps5.pdf` to your github repo.
@@ -209,6 +209,7 @@ Call scrape_enforcement_actions with specific year and month values, such as scr
 * b. Create Dynamic Scraper (PARTNER 2)
 
 ```{python}
+#| eval: false 
 def scrape_enforcement_actions(year, month):
     if year < 2013:
         print("The year should be restricted to 2013 or later.")
@@ -292,6 +293,7 @@ There are 1534 enforcement actions.
 * c. Test Partner's Code (PARTNER 1)
 
 ```{python}
+#| eval: false
 scrape_enforcement_actions(2021, 1)
 ```
 
@@ -411,6 +413,7 @@ topic_chart = alt.Chart(df_topic_monthly, title="Number of Enforcement Actions b
 )
 
 topic_chart.display()
+
 ```
 
 
@@ -422,30 +425,77 @@ topic_chart.display()
 ```{python}
 import geopandas as gpd
 import matplotlib.pyplot as plt
-# load state shapefile
-us_states = gpd.read_file('/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/cb_2018_us_state_5m')
-# aggregate data 'State' & 'Enforcement Count'
+state_actions =  df_enforcement_2021[ df_enforcement_2021['Agency Name'].str.contains("State of", case=False, na=False)]
+
+# Extract state names from "Agency Name" for accurate grouping
+
+state_actions['State'] = state_actions['Agency Name'].str.replace("State of ", "", case=False, regex=True).str.strip()
+
+# Count the number of enforcement actions per state
+state_counts = state_actions['State'].value_counts().reset_index()
+state_counts.columns = ['State', 'Enforcement Count']
+
+# Load the US Census state shapefile
+# Make sure to replace with your actual shapefile path
+state_shapefile_path = '/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/cb_2018_us_state_5m'
+us_states = gpd.read_file(state_shapefile_path)
+
+# Merge state counts with the shapefile
 us_states = us_states.merge(state_counts, how="left", left_on="NAME", right_on="State")
 us_states['Enforcement Count'] = us_states['Enforcement Count'].fillna(0)
-# graph
+
+# Plot the map
 fig, ax = plt.subplots(1, 1, figsize=(20, 15))
 us_states.plot(column='Enforcement Count', cmap='OrRd', linewidth=0.8, ax=ax, edgecolor='0.8', legend=True)
-ax.set_title('Enforcement Actions by State', fontdict={'fontsize': '18', 'fontweight': '3'})
+ax.set_title('Number of Enforcement Actions by State', fontdict={'fontsize': '18', 'fontweight': '3'})
 
-ax.set_xlim([-130, -60]) 
-ax.set_ylim([20, 55])   
+# Set map boundaries to display the US clearly
+ax.set_xlim([-180, -50])
+ax.set_ylim([15, 75])
 ax.set_axis_off()
 
 plt.show()
+
+
 ```
 
 
 ### 2. Map by District (PARTNER 2)
 
 ```{python}
+# Load enforcement actions data for 2021 and filter by district
+df_enforcement_2021_district = df_enforcement_2021[df_enforcement_2021['Agency Name'].str.contains(
+    "District", case=False, na=False)]
+
+# Extract district names from the "Agency Name" column
+df_enforcement_2021_district['District'] = df_enforcement_2021_district['Agency Name'].str.extract(
+    r'U\.S\. Attorney[’\'s]* Office, (.+)')[0]
+
+# Group by district and count the number of enforcement actions per district
+df_districts_count = df_enforcement_2021_district.groupby(
+    ['District']).size().reset_index(name='Enforcement_count')
+
+# Load the US Attorney District shapefile
+gdf_districts = gpd.read_file(
+    'geo_export_be204818-01a4-4982-a890-81531d8a7432.shp')
+# Merge enforcement counts with the shapefile
+map_districts = gdf_districts.merge(
+    df_districts_count, left_on='judicial_d', right_on='District', how='left')
+map_districts['Enforcement_count'] = map_districts['Enforcement_count'].fillna(
+    0)
+
+# plot a choropleth
+fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+map_districts.plot(column='Enforcement_count', ax=ax,
+                   cmap='Blues', edgecolor='0.8', legend=True).set_axis_off()
+
+ax.set_xlim([-180, -50])
+ax.set_ylim([15, 75])
+plt.title("Enforcement Actions by US Attorney District (2021)", fontsize=15)
+
+plt.show()
 
 ```
-
 
 
 
@@ -453,68 +503,57 @@ plt.show()
 
 ### 1. Merge zip code shapefile with population
 ```{python}
-import geopandas as gpd
-import pandas as pd
-
-# Set paths to the files
-zip_shapefile_path = '/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/gz_2010_us_860_00_500k.shp'
-population_csv_path = '/Users/apple/Desktop/class/Dap-2/problem_sets/ps5/Ruyu-problem-set-5-paired-part/DECENNIALDHC2020.P1-Data.csv'
-
-# Load the ZIP Code shapefile
-zip_gdf = gpd.read_file(zip_shapefile_path)
-
-# Load the population CSV
-population_df = pd.read_csv(population_csv_path)
-
-# Ensure ZIP Code column in population data matches the ZIP Code field in shapefile
-population_df['ZCTA'] = population_df['ZCTA'].astype(str)
+# Load dataframes
+zip_gdf = gpd.read_file('gz_2010_us_860_00_500k.shp')
+population_df = pd.read_csv('DECENNIALDHC2020.P1-Data.csv')
+```
+```{python}
+# Clean population data
+population_df['ZCTA5'] = population_df['NAME'].str.extract(r"ZCTA5 (\d+)")
 
 # Merge ZIP Code shapefile with population data on the ZIP Code column
-zip_gdf = zip_gdf.merge(population_df, left_on="ZCTA5CE10", right_on="ZCTA", how="left")
-print("Merged ZIP Code shapefile with population data:")
-print(zip_gdf.head())
+zip_map = zip_gdf.merge(population_df, on='ZCTA5', how='left')
 
+zip_map.head()
 ```
 
 ### 2. Conduct spatial join
 ```{python}
-# Load US Attorney District shapefile
-district_shapefile_path = '/path/to/US_Attorney_Districts_Shapefile.shp'  # Replace with actual path
-district_gdf = gpd.read_file(district_shapefile_path)
-
-# Ensure both GeoDataFrames use the same Coordinate Reference System (CRS)
-zip_gdf = zip_gdf.to_crs(district_gdf.crs)
-
 # Perform spatial join between ZIP Code shapefile and District shapefile
-zip_district_join = gpd.sjoin(zip_gdf, district_gdf, how="inner", op="intersects")
+zip_district_join = gpd.sjoin(
+    zip_map, gdf_districts, how="inner", predicate="intersects")
+zip_district_join.head()
 
 # Aggregate population to get total population in each district
-district_population = zip_district_join.groupby('DISTRICT_NAME')['P1_TOTAL_POPULATION'].sum().reset_index()
-district_population.columns = ['District', 'Total Population']  # Rename columns for clarity
-print("Aggregated population by district:")
-print(district_population.head())
+district_population = zip_district_join.groupby(
+    'ZCTA5')['P1_001N'].sum().reset_index()
+district_population.columns = ['District', 'Total Population']
 
-
+district_population.head()
 ```
 
 ### 3. Map the action ratio in each district
 ```{python}
-district_data = district_population.merge(enforcement_actions_df, on='District', how='left')
-district_data['Action Count'] = district_data['Action Count'].fillna(0)  # Fill missing action counts with 0
+# Convert district_population['Total Population'] from string to numeric
+district_population['Total Population'] = pd.to_numeric(
+    district_population['Total Population'], errors='coerce')
 
 # Calculate the ratio of enforcement actions per capita
-district_data['Actions Per Capita'] = district_data['Action Count'] / district_data['Total Population']
-
+df_districts_count['Actions Per Capita'] = df_districts_count['Enforcement_count'] / \
+    district_population['Total Population']
+```
+```{python}
 # Merge with district GeoDataFrame for mapping
-district_map_gdf = district_gdf.merge(district_data, left_on='DISTRICT_NAME', right_on='District')
+district_map_gdf = gdf_districts.merge(
+    df_districts_count, left_on='judicial_d', right_on='District', how='left')
 
 # Plot the map
-import matplotlib.pyplot as plt
-
 fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-district_map_gdf.plot(column='Actions Per Capita', cmap='Reds', linewidth=0.8, ax=ax, edgecolor='0.8', legend=True)
+district_map_gdf.plot(column='Actions Per Capita', cmap='Blues',
+                      ax=ax, edgecolor='0.8', legend=True).set_axis_off()
+ax.set_xlim([-180, -50])
+ax.set_ylim([15, 75])
 ax.set_title("Enforcement Actions Per Capita by US Attorney District")
+
 plt.show()
-
-
 ```
